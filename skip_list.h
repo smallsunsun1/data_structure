@@ -10,8 +10,6 @@
 
 namespace sss {
 
-inline constexpr uint32_t kMaxHeight = 12;
-const inline std::uniform_int_distribution<> kDistribute(0, kMaxHeight);
 
 template <typename T, typename Comparator>
 requires is_string_view_compator<Comparator> class SkipList {
@@ -43,9 +41,14 @@ public:
     Iterator(const SkipList *list) : list_(list) {}
     bool Valid() const {return node_ != nullptr;}
     std::string_view Key() const {
-
+      assert(Valid());
+      return node_->key_;
     }
-    Iterator &operator++();
+    Iterator &operator++() {
+      assert(Valid());
+      node_ = node_->Next(0);
+      return *this;
+    }
     Iterator &operator--();
     void Seek(std::string_view target);
     void SeekToFirst();
@@ -57,6 +60,7 @@ public:
   };
 
 private:
+  static constexpr uint32_t kMaxHeight = 12;
   inline uint32_t GetMaxHeight() {
     return max_height_.load(std::memory_order_relaxed);
   }
@@ -65,7 +69,14 @@ private:
         std::malloc(sizeof(Node) + sizeof(std::atomic<Node *>) * (height - 1));
     return new (mem) Node(key);
   }
-  uint32_t RandomHeight();
+  uint32_t RandomHeight() {
+    static constexpr uint32_t kBranching = 4;
+    uint32_t height = 1;
+    while (height < kMaxHeight && ((dist_(rand_) % kBranching) == 0)) {
+      height++;
+    }
+    return height;
+  }
   bool Equal(std::string_view a, std::string_view b) const {
     return compare_(a, b);
   }
@@ -74,6 +85,7 @@ private:
   Node *head_;
   std::atomic<uint32_t> max_height_;
   std::random_device rand_;
+  std::uniform_int_distribution<> dist_;
 };
 
 template <typename T, typename Comparator>
@@ -94,6 +106,7 @@ public:
 
 private:
   friend class SkipList<T, Comparator>;
+  friend class SkipList<T, Comparator>::Iterator;
   std::string_view key_;
   std::atomic<Node *> next_[1];
 };
