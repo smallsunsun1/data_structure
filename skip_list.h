@@ -10,9 +10,7 @@
 
 namespace sss {
 
-
-template <typename T, typename Comparator>
-requires is_string_view_compator<Comparator> class SkipList {
+template <typename Key, typename Comparator> class SkipList {
 private:
   struct Node;
 
@@ -34,13 +32,36 @@ public:
       std::free(node);
     }
   }
-  void Insert(std::string_view key);
-  bool Contains(std::string_view key) const;
+  void Insert(const Key& key) {
+    Node *prev[kMaxHeight];
+    Node *x = FindGreaterOrEqual(key, prev);
+    assert(x == nullptr || !Equal(key, x->key_));
+    uint32_t height = RandomHeight();
+    if (height > GetMaxHeight()) {
+      for (uint32_t i = GetMaxHeight(); i < height; ++i) {
+        prev[i] = head_;
+      }
+      max_height_.store(height, std::memory_order_relaxed);
+    }
+    x = NewNode(key, height);
+    for (uint32_t i = 0; i < height; ++i) {
+      x->FastSetNext(i, prev[i]->FastNext(i));
+      prev[i]->SetNext(i, x);
+    }
+  }
+  bool Contains(const Key& key) const {
+    Node *x = FindGreaterOrEqual(key, nullptr);
+    if (x != nullptr && Equal(key, x->key_)) {
+      return true;
+    } else {
+      return false;
+    }
+  }
   class Iterator {
   public:
     Iterator(const SkipList *list) : list_(list) {}
-    bool Valid() const {return node_ != nullptr;}
-    std::string_view Key() const {
+    bool Valid() const { return node_ != nullptr; }
+    const Key& key() const {
       assert(Valid());
       return node_->key_;
     }
@@ -50,7 +71,7 @@ public:
       return *this;
     }
     Iterator &operator--();
-    void Seek(std::string_view target);
+    void Seek(const Key& target);
     void SeekToFirst();
     void SeekToLast();
 
@@ -61,10 +82,10 @@ public:
 
 private:
   static constexpr uint32_t kMaxHeight = 12;
-  inline uint32_t GetMaxHeight() {
+  inline uint32_t GetMaxHeight() const {
     return max_height_.load(std::memory_order_relaxed);
   }
-  Node *NewNode(std::string_view key, uint32_t height) const {
+  Node *NewNode(const Key& key, uint32_t height) const {
     void *mem =
         std::malloc(sizeof(Node) + sizeof(std::atomic<Node *>) * (height - 1));
     return new (mem) Node(key);
@@ -77,8 +98,60 @@ private:
     }
     return height;
   }
-  bool Equal(std::string_view a, std::string_view b) const {
-    return compare_(a, b);
+  bool Equal(const Key& a, const Key& b) const { return a == b; }
+  bool IsAfterNode(const Key& key, Node *node) const {
+    return (node != nullptr) && (compare_(node->key_, key) < 0);
+  }
+  Node *FindGreaterOrEqual(const Key& key, Node **prev) const {
+    Node *x = head_;
+    uint32_t level = GetMaxHeight() - 1;
+    while (true) {
+      Node *next = x->Next(level);
+      if (IsAfterNode(key, next)) {
+        x = next;
+      } else {
+        if (prev != nullptr)
+          prev[level] = x;
+        if (level == 0)
+          return next;
+        else {
+          level--;
+        }
+      }
+    }
+  }
+  Node *FindLessThan(const Key& key) const {
+    Node *x = head_;
+    uint32_t level = GetMaxHeight() - 1;
+    while (true) {
+      assert(x == head_ || compare_(x->key_, key) < 0);
+      Node *next = x->Next(level);
+      if (next == nullptr || compare_(next->key_, key) >= 0) {
+        if (level == 0) {
+          return x;
+        } else {
+          level--;
+        }
+      } else {
+        x = next;
+      }
+    }
+  }
+  Node *FindLast() const {
+    Node *x = head_;
+    uint32_t level = GetMaxHeight() - 1;
+    while (true) {
+      Node *next = x->Next(level);
+      if (next == nullptr) {
+        if (level == 0) {
+          return x;
+        } else {
+          level--;
+        }
+      } else {
+        x = next;
+      }
+    }
   }
 
   Comparator const compare_;
@@ -88,11 +161,10 @@ private:
   std::uniform_int_distribution<> dist_;
 };
 
-template <typename T, typename Comparator>
-requires is_string_view_compator<Comparator> struct SkipList<T,
-                                                             Comparator>::Node {
+template <typename Key, typename Comparator>
+struct SkipList<Key, Comparator>::Node {
 public:
-  explicit Node(std::string_view key) : key_(key) {}
+  explicit Node(const Key& key) : key_(key) {}
   Node *Next(uint32_t n) { return next_[n].load(std::memory_order_acquire); }
   void SetNext(uint32_t n, Node *node) {
     next_[n].store(node, std::memory_order_release);
@@ -100,14 +172,14 @@ public:
   Node *FastNext(uint32_t n) {
     return next_[n].load(std::memory_order_relaxed);
   }
-  Node *FastSetNext(uint32_t n, Node *node) {
+  void FastSetNext(uint32_t n, Node *node) {
     next_[n].store(node, std::memory_order_relaxed);
   }
 
 private:
-  friend class SkipList<T, Comparator>;
-  friend class SkipList<T, Comparator>::Iterator;
-  std::string_view key_;
+  friend class SkipList<Key, Comparator>;
+  friend class SkipList<Key, Comparator>::Iterator;
+  Key key_;
   std::atomic<Node *> next_[1];
 };
 
