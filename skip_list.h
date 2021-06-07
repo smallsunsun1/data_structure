@@ -1,7 +1,6 @@
 #ifndef SKIP_LIST_
 #define SKIP_LIST_
 
-#include "concept.h"
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -100,7 +99,7 @@ private:
   }
   bool Equal(const Key& a, const Key& b) const { return a == b; }
   bool IsAfterNode(const Key& key, Node *node) const {
-    return (node != nullptr) && (compare_(node->key_, key) < 0);
+    return (node != nullptr) && (compare_(node->key_, key));
   }
   Node *FindGreaterOrEqual(const Key& key, Node **prev) const {
     Node *x = head_;

@@ -1,0 +1,1 @@
+bazel build --repo_env=CC=/usr/bin/gcc --repo_env=CXX=/usr/bin/g++ --features=-default_compile_flags --config=asan //:skip_list_test
