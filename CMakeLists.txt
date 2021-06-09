@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.18)
 enable_language(CXX)
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 
 add_library(skiplist INTERFACE skip_list.h)
 add_executable(skip_list_test skip_list_test.cpp)

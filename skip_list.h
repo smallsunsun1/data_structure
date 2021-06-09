@@ -15,7 +15,7 @@ private:
 
 public:
   SkipList(Comparator compare)
-      : compare_(std::move(compare_)), head_(NewNode("", kMaxHeight)),
+      : compare_(std::move(compare)), head_(NewNode("", kMaxHeight)),
         max_height_(1) {
     for (uint32_t i = 0; i < kMaxHeight; ++i) {
       head_->SetNext(i, nullptr);
@@ -31,7 +31,7 @@ public:
       std::free(node);
     }
   }
-  void Insert(const Key& key) {
+  void Insert(const Key &key) {
     Node *prev[kMaxHeight];
     Node *x = FindGreaterOrEqual(key, prev);
     assert(x == nullptr || !Equal(key, x->key_));
@@ -48,7 +48,7 @@ public:
       prev[i]->SetNext(i, x);
     }
   }
-  bool Contains(const Key& key) const {
+  bool Contains(const Key &key) const {
     Node *x = FindGreaterOrEqual(key, nullptr);
     if (x != nullptr && Equal(key, x->key_)) {
       return true;
@@ -60,7 +60,7 @@ public:
   public:
     Iterator(const SkipList *list) : list_(list) {}
     bool Valid() const { return node_ != nullptr; }
-    const Key& key() const {
+    const Key &key() const {
       assert(Valid());
       return node_->key_;
     }
@@ -69,10 +69,24 @@ public:
       node_ = node_->Next(0);
       return *this;
     }
-    Iterator &operator--();
-    void Seek(const Key& target);
-    void SeekToFirst();
-    void SeekToLast();
+    Iterator &operator--() {
+      assert(Valid());
+      node_ = list_->FindLessThan(node_->key_);
+      if (node_ == list_->head_) {
+        node_ = nullptr;
+      }
+      return *this;
+    }
+    void Seek(const Key &target) {
+      node_ = list_->FindGreaterOrEqual(target, nullptr);
+    }
+    void SeekToFirst() { node_ = list_->head_->Next(0); }
+    void SeekToLast() {
+      node_ = list_->FindLast();
+      if (node_ == list_->head_) {
+        node_ = nullptr;
+      }
+    }
 
   private:
     const SkipList *list_;
@@ -84,7 +98,7 @@ private:
   inline uint32_t GetMaxHeight() const {
     return max_height_.load(std::memory_order_relaxed);
   }
-  Node *NewNode(const Key& key, uint32_t height) const {
+  Node *NewNode(const Key &key, uint32_t height) const {
     void *mem =
         std::malloc(sizeof(Node) + sizeof(std::atomic<Node *>) * (height - 1));
     return new (mem) Node(key);
@@ -97,11 +111,11 @@ private:
     }
     return height;
   }
-  bool Equal(const Key& a, const Key& b) const { return a == b; }
-  bool IsAfterNode(const Key& key, Node *node) const {
-    return (node != nullptr) && (compare_(node->key_, key));
+  bool Equal(const Key &a, const Key &b) const { return (compare_(a, b) == 0); }
+  bool IsAfterNode(const Key &key, Node *node) const {
+    return (node != nullptr) && (compare_(node->key_, key) < 0);
   }
-  Node *FindGreaterOrEqual(const Key& key, Node **prev) const {
+  Node *FindGreaterOrEqual(const Key &key, Node **prev) const {
     Node *x = head_;
     uint32_t level = GetMaxHeight() - 1;
     while (true) {
@@ -119,7 +133,7 @@ private:
       }
     }
   }
-  Node *FindLessThan(const Key& key) const {
+  Node *FindLessThan(const Key &key) const {
     Node *x = head_;
     uint32_t level = GetMaxHeight() - 1;
     while (true) {
@@ -163,7 +177,7 @@ private:
 template <typename Key, typename Comparator>
 struct SkipList<Key, Comparator>::Node {
 public:
-  explicit Node(const Key& key) : key_(key) {}
+  explicit Node(const Key &key) : key_(key) {}
   Node *Next(uint32_t n) { return next_[n].load(std::memory_order_acquire); }
   void SetNext(uint32_t n, Node *node) {
     next_[n].store(node, std::memory_order_release);
