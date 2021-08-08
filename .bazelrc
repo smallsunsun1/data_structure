@@ -1,8 +1,24 @@
+build --show_timestamps
+# Do not show warnings from external dependencies.
+build --output_filter="^//"
+
+build:debug -c dbg
+build:debug --copt="-g"
+build:debug --strip="never"
+build:optimize -c opt
+build:optimize --copt="-O3"
+build:optimize --strip="always"
+build:optimize --copt=-march=native
+build:optimize --host_copt=-march=native
+
 build --compilation_mode=opt
 build --color=yes
 build --cxxopt="-std=c++2a"
 build --cxxopt="-fdiagnostics-color=always"
 build --cxxopt="-Wall"
+build --cxxopt='-Wextra'
+build --features=-default_compile_flags
+
 build:asan --strip=never
 build:asan --copt -fsanitize=address
 build:asan --copt -DADDRESS_SANITIZER
